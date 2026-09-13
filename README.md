@@ -1,73 +1,127 @@
-# PetCare+ Learning Backend
+# PetCare+ Backend
 
-Boilerplate Laravel 12 (Docker + Postgres + Redis) để học và phát triển PetCare+.
+REST API for a pet care e-commerce platform. Built with Laravel 12, PostgreSQL, Redis, and Docker.
 
-## Có gì lúc đầu?
+## Stack
 
-| Có | Học sau / chưa cần |
+| Layer | Technology |
 |---|---|
-| Laravel 12, PHP 8.4, Docker | Auth OTP, AWS, Firebase, MinIO |
-| Postgres + Redis + Nginx + MailHog | — |
-| `Modules/Core` (BaseModel, BaseService…) | — |
-| API middleware + `ApiResponse` | Feature nghiệp vụ đầy đủ |
-| `GET /api/v1/health` | Identity, Catalog, Cart, Order (bạn tự thêm) |
-| Migration tối thiểu: users, cache, jobs, tokens | Bảng catalog / order |
+| Runtime | PHP 8.4 + Laravel 12 |
+| Database | PostgreSQL 16 |
+| Cache | Redis |
+| Auth | Laravel Sanctum (access + refresh token) |
+| OAuth | Google via Laravel Socialite |
+| Container | Docker (nginx + php-fpm + postgres + redis) |
+| Tests | Pest |
 
-## Chạy lần đầu
+## Quick Start
 
-1. Mở **Docker Desktop** (Engine Running).
-2. Trong terminal:
+Requires Docker Desktop running.
 
 ```bash
-cd /Users/macbook_239/Desktop/Project/ITFS/Backend/BaseSource/petcare-be
-make start
+make start        # build + migrate + seed
+make test         # run Pest test suite
+make shell        # open shell inside app container
+make stop         # stop all containers
 ```
 
-3. Kiểm tra:
+Health check: `GET http://localhost:8080/api/v1/health`
 
-```bash
-curl -i http://localhost:8080/api/v1/health
-curl -i http://localhost:8080/up
+## API Endpoints
+
+All routes are prefixed `/api/v1`.
+
+### Auth
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/auth/register` | Register, returns access + refresh token |
+| POST | `/auth/login` | Login by email/password |
+| POST | `/auth/refresh` | Rotate refresh token |
+| GET | `/auth/google` | Get Google OAuth redirect URL |
+| GET | `/auth/google/callback` | Google OAuth callback |
+
+### Products
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/products` | List published products (paginated, cached) |
+| GET | `/products/{id}` | Product detail |
+
+Query params: `?brand_id=`, `?category_id=`, `?q=` (search), `?page=`, `?per_page=`
+
+### Cart
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/cart` | View cart |
+| POST | `/cart/items` | Add item |
+| PATCH | `/cart/items/{id}` | Update quantity |
+| DELETE | `/cart/items/{id}` | Remove item |
+
+### Orders
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/orders/checkout` | Checkout cart (supports voucher_code) |
+| GET | `/orders` | Order history |
+| GET | `/orders/{id}` | Order detail |
+
+### Admin (requires admin role)
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/admin/products` | List all products |
+| POST | `/admin/products` | Create product |
+| PATCH | `/admin/products/{id}` | Update product |
+| DELETE | `/admin/products/{id}` | Delete product |
+
+## Authentication
+
+Tokens are issued at login/register:
+
+```json
+{
+  "access_token": "...",   
+  "refresh_token": "...",  
+  "token_type": "Bearer"
+}
 ```
 
-Kỳ vọng: JSON `success: true`, `database: ok`, `redis: ok`.
+- Access token expires in **15 minutes**
+- Refresh token expires in **30 days** (ability: `auth:refresh`)
+- Rate limit on login: **5 attempts/minute per IP**
 
-## Lệnh thường dùng
+Pass token in header: `Authorization: Bearer <access_token>`
 
-| Lệnh | Việc |
-|---|---|
-| `make start` | Up Docker + composer + migrate |
-| `make stop` | Dừng |
-| `make shell` | Vào container app |
-| `make logs` | Xem log |
-| `make migrate` | Chạy migration |
-| `make seed` | Tạo user `learner@example.com` / `password` |
-| `make test` | Pest |
+## Database Schema
 
-## Cấu trúc học (nhìn trước)
-
-```text
-app/
-  Http/Controllers/HealthController.php   ← API mẫu đầu tiên
-  Http/Resources/ApiResponse.php          ← format JSON chuẩn
-  Models/User.php                         ← user tối giản
-routes/api.php                            ← đăng ký route API
-Modules/Core/                             ← nền tảng (đọc dần)
-database/migrations/                      ← schema version
+```
+users           — id, name, email, password, role (customer|admin)
+brands          — id, name, slug, is_active
+categories      — id, name, slug
+products        — id, brand_id, name, slug, sku, status (published|draft)
+product_categories — product_id, category_id
+product_prices  — id, product_id, currency, amount
+inventories     — id, product_id, quantity, version (optimistic lock)
+carts           — id, user_id
+cart_items      — id, cart_id, product_id, quantity
+vouchers        — id, code, discount_amount, expires_at, is_active
+orders          — id, user_id, voucher_id, status, total_amount
+order_items     — id, order_id, product_id, quantity, unit_price
+payments        — id, order_id, amount, status, method
 ```
 
-## Học tiếp ở đâu?
+## Environment
 
-1. Lộ trình tổng: `../../Learning/README.md`
-2. Bài thực hành trên source này: `../../Learning/lessons/01-chay-petcare-be.md`
-3. Business (sau khi stack chạy): `../../Docs/content/business/`
+Copy `.env.example` to `.env` and fill in:
 
-## Thêm tính năng sau này (ý tưởng)
+```
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_REDIRECT_URI=http://localhost:8080/api/v1/auth/google/callback
+```
 
-Khi đã quen health endpoint, thêm dần theo Docs:
-
-1. Identity — register/login  
-2. Catalog — products  
-3. Cart → Order → Inventory lock  
-
-Mỗi feature = migration (nếu cần) + route + controller + service.
+Default seed credentials:
+- Admin: `admin@petcare.com` / `password`
+- Customer: `learner@example.com` / `password`
