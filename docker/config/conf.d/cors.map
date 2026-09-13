@@ -1,0 +1,16 @@
+# File này bị GHI ĐÈ mỗi lần container start bởi generate-nginx-cors-map.sh
+# (chỉ từ CORS_ALLOWED_ORIGINS — CDK map từ s3AllowedOrigins theo STG/PROD).
+
+map $http_origin $cors_allow_origin {
+    default "";
+}
+
+map $request_uri $cors_is_api {
+    default 0;
+    ~^/api/  1;
+}
+
+map "${cors_is_api}:${cors_allow_origin}" $cors_response_origin {
+    default "";
+    ~^1:https?:// $cors_allow_origin;
+}

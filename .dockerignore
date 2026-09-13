@@ -1,0 +1,44 @@
+# Git metadata
+.git
+.gitignore
+
+# Infra and tooling
+infrastructure/
+cdk.out/
+.cdk.staging/
+.github/
+.gitlab/
+
+# Node/composer caches
+node_modules/
+.phpunit.cache/
+coverage/
+
+# Python caches (if any)
+**/.pytest_cache/
+**/__pycache__/
+
+# OS/env files
+**/.DS_Store
+**/.env*
+.env
+.env.*
+
+# Local-only volumes/logs
+storage/logs/
+docker/logs/
+
+# Optional: keep vendor if Dockerfile runs composer install (uncomment to exclude)
+# vendor/
+
+# Tests and docs not needed in runtime image
+/tests/
+/docs/
+README.md
+
+# Frontend assets (adjust if your Dockerfile builds them separately)
+resources/js/
+resources/css/
+
+# Swagger or dev-only artifacts
+swagger/

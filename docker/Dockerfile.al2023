@@ -1,0 +1,101 @@
+FROM public.ecr.aws/amazonlinux/amazonlinux:2023
+
+ENV COMPOSER_ALLOW_SUPERUSER=1 \
+    APP_ENV=production \
+    APP_PATH=/var/www/html
+
+# Install system packages: nginx, PHP and common extensions, git, unzip
+RUN dnf -y update \
+    && dnf -y install \
+       nginx \
+       bash \
+       php-fpm \
+       php-cli \
+       php-pdo \
+       php-pgsql \
+       php-mbstring \
+       php-xml \
+       php-json \
+       php-curl \
+       php-zip \
+       php-opcache \
+       php-gd \
+       php-bcmath \
+       php-intl \
+       php-exif \
+       php-soap \
+       php-process \
+       php-redis \
+       php-sodium \
+       git \
+       unzip \
+       which \
+       tar \
+       gzip \
+       shadow-utils \
+       cronie \
+    && dnf clean all \
+    && rm -rf /var/cache/dnf
+
+# Create application directory
+RUN mkdir -p ${APP_PATH}
+WORKDIR ${APP_PATH}
+
+# Copy application source
+COPY . ${APP_PATH}
+
+# Copy Nginx configuration
+COPY docker/config/nginx.conf /etc/nginx/nginx.conf
+COPY docker/config/conf.d/ /etc/nginx/conf.d/
+
+# Normalize Nginx FastCGI upstream to local PHP-FPM (single image)
+RUN sed -i 's@fastcgi_pass\s\+app:9000@fastcgi_pass 127.0.0.1:9000@g' /etc/nginx/conf.d/*.conf || true \
+    && sed -i 's@upstream\s\+app\s*\{[^}]*\}@@g' /etc/nginx/conf.d/*.conf || true
+
+# PHP-FPM configuration adjustments
+# error_log is a GLOBAL directive - must go in php-fpm.conf, NOT www.conf ([www] pool)
+RUN sed -i 's@^;daemonize = yes@daemonize = no@' /etc/php-fpm.conf \
+    && echo "error_log = /proc/self/fd/2" >> /etc/php-fpm.conf \
+    && sed -i 's@^user = apache@user = nginx@' /etc/php-fpm.d/www.conf \
+    && sed -i 's@^group = apache@group = nginx@' /etc/php-fpm.d/www.conf \
+    && sed -i 's@^;listen.mode = 0660@listen.mode = 0660@' /etc/php-fpm.d/www.conf \
+    && sed -i 's@^listen = .*@listen = 127.0.0.1:9000@' /etc/php-fpm.d/www.conf \
+    && echo "catch_workers_output = yes" >> /etc/php-fpm.d/www.conf \
+    && echo "decorate_workers_output = no" >> /etc/php-fpm.d/www.conf \
+    && echo "php_admin_value[error_log] = /proc/self/fd/2" >> /etc/php-fpm.d/www.conf \
+    && echo "php_admin_flag[log_errors] = on" >> /etc/php-fpm.d/www.conf \
+    && echo "clear_env = no" >> /etc/php-fpm.d/www.conf
+
+# Ensure PHP-FPM runtime dir exists
+RUN mkdir -p /run/php-fpm \
+    && chown -R nginx:nginx /run/php-fpm
+
+# Install Composer (if not present via dnf)
+RUN php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');" \
+    && php composer-setup.php --install-dir=/usr/local/bin --filename=composer \
+    && rm composer-setup.php \
+    && composer --version
+
+# Install PHP dependencies (optimize for prod)
+RUN composer install --no-dev --optimize-autoloader --no-interaction
+
+# Laravel storage permissions
+RUN mkdir -p var/www/html/storage /var/www/html/bootstrap/cache \
+    && chown -R nginx:nginx /var/www/html/storage /var/www/html/bootstrap/cache \
+    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
+    
+EXPOSE 80
+
+# Nginx CORS whitelist (runtime): generated from CORS_ALLOWED_ORIGINS
+COPY docker/scripts/generate-nginx-cors-map.sh /usr/local/bin/generate-nginx-cors-map.sh
+RUN chmod 0755 /usr/local/bin/generate-nginx-cors-map.sh
+
+# Entrypoint to start php-fpm (background) and nginx (foreground)
+COPY docker/entrypoint.al2023.sh /usr/local/bin/entrypoint-al2023.sh
+# Normalize line endings and ensure executable bit to avoid "exec format error"
+RUN sed -i 's/\r$//' /usr/local/bin/entrypoint-al2023.sh \
+    && chmod 0755 /usr/local/bin/entrypoint-al2023.sh
+
+ENTRYPOINT ["/usr/local/bin/entrypoint-al2023.sh"]
+
+

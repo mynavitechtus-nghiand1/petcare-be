@@ -1,0 +1,1 @@
+{{ __('sms.otp_verification', ['otp_code' => $otpCode]) }}
