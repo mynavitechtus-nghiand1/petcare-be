@@ -10,11 +10,16 @@ Route::get('/', function () {
 });
 
 Route::get('/api/documentation', function () {
-    $user = request()->getUser();
-    $pass = request()->getPassword();
+    $auth = request()->header('Authorization', '');
+    $user = null;
+    $pass = null;
 
-    $expectedUser = config('app.docs_user', 'admin');
-    $expectedPass = config('app.docs_password', 'secret');
+    if (str_starts_with($auth, 'Basic ')) {
+        [$user, $pass] = explode(':', base64_decode(substr($auth, 6)), 2);
+    }
+
+    $expectedUser = env('DOCS_USER', 'admin');
+    $expectedPass = env('DOCS_PASSWORD', 'secret');
 
     if ($user !== $expectedUser || $pass !== $expectedPass) {
         return response('Unauthorized', 401, [
