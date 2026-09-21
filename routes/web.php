@@ -10,5 +10,17 @@ Route::get('/', function () {
 });
 
 Route::get('/api/documentation', function () {
+    $user = request()->getUser();
+    $pass = request()->getPassword();
+
+    $expectedUser = config('app.docs_user', 'admin');
+    $expectedPass = config('app.docs_password', 'secret');
+
+    if ($user !== $expectedUser || $pass !== $expectedPass) {
+        return response('Unauthorized', 401, [
+            'WWW-Authenticate' => 'Basic realm="PetCare Docs"',
+        ]);
+    }
+
     return view('swagger');
 });
