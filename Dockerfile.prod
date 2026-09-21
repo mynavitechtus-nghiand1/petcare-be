@@ -1,0 +1,71 @@
+FROM php:8.5-fpm
+
+# Install system dependencies + nginx + supervisor
+RUN apt-get update && apt-get install -y \
+    nginx \
+    supervisor \
+    curl git unzip zip \
+    libpq-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev \
+    libzip-dev libicu-dev libxml2-dev libonig-dev \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install PHP extensions (no Xdebug)
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-configure intl \
+    && docker-php-ext-install \
+        pdo pdo_pgsql pgsql mbstring exif pcntl bcmath gd zip intl xml opcache
+
+# Install Redis PHP extension
+RUN pecl install redis && docker-php-ext-enable redis
+
+# Opcache tuning for production
+RUN { \
+    echo 'opcache.enable=1'; \
+    echo 'opcache.memory_consumption=128'; \
+    echo 'opcache.max_accelerated_files=10000'; \
+    echo 'opcache.validate_timestamps=0'; \
+} > /usr/local/etc/php/conf.d/opcache.ini
+
+# Install Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+WORKDIR /var/www/html
+
+# Install PHP deps first (layer cache)
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --optimize-autoloader --no-scripts --no-interaction --ignore-platform-reqs
+
+# Copy app code
+COPY . .
+
+# Final composer scripts
+RUN composer dump-autoload --optimize --no-dev
+
+# Set permissions
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 775 storage bootstrap/cache
+
+# Nginx: production config
+COPY docker/config/nginx.conf /etc/nginx/nginx.conf
+COPY docker/config/conf.d/cors.map /etc/nginx/conf.d/cors.map
+COPY docker/config/conf.d/default.prod.conf /etc/nginx/conf.d/default.conf
+
+# Create PHP-FPM log files
+RUN mkdir -p /var/log \
+    && touch /var/log/php-fpm-access.log /var/log/php-fpm-slow.log \
+    && chown www-data:www-data /var/log/php-fpm-access.log /var/log/php-fpm-slow.log
+
+# PHP-FPM config
+COPY docker/config/php/php-fpm.conf /usr/local/etc/php-fpm.d/www.conf
+COPY docker/config/php.ini /usr/local/etc/php/php.ini
+
+# Supervisord
+COPY docker/config/supervisord.prod.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Entrypoint
+COPY docker/entrypoint.prod.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+EXPOSE 80
+
+ENTRYPOINT ["/entrypoint.sh"]
