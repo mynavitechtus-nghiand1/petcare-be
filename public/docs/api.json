@@ -1,0 +1,308 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "PetCare+ API",
+    "description": "REST API for PetCare+ e-commerce platform",
+    "version": "1.0.0"
+  },
+  "servers": [
+    { "url": "/api/v1", "description": "Production" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "TokenResponse": {
+        "type": "object",
+        "properties": {
+          "access_token": { "type": "string" },
+          "refresh_token": { "type": "string" },
+          "token_type": { "type": "string", "example": "Bearer" }
+        }
+      },
+      "Product": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" },
+          "slug": { "type": "string" },
+          "sku": { "type": "string" },
+          "status": { "type": "string", "enum": ["published", "draft"] },
+          "brand": { "type": "object" },
+          "categories": { "type": "array", "items": { "type": "object" } },
+          "price": { "type": "object" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["System"],
+        "summary": "Health check",
+        "responses": {
+          "200": { "description": "OK" }
+        }
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Register new account",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "email", "password"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string", "format": "password" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Registered",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TokenResponse" } } }
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Login by email/password",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login success",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TokenResponse" } } }
+          }
+        }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Rotate refresh token",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "New tokens", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TokenResponse" } } } }
+        }
+      }
+    },
+    "/auth/google": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Get Google OAuth redirect URL",
+        "responses": {
+          "200": { "description": "Redirect URL" }
+        }
+      }
+    },
+    "/products": {
+      "get": {
+        "tags": ["Products"],
+        "summary": "List published products (paginated, cached)",
+        "parameters": [
+          { "name": "brand_id", "in": "query", "schema": { "type": "integer" } },
+          { "name": "category_id", "in": "query", "schema": { "type": "integer" } },
+          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Search keyword" },
+          { "name": "page", "in": "query", "schema": { "type": "integer" } },
+          { "name": "per_page", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "List of products" }
+        }
+      }
+    },
+    "/products/{id}": {
+      "get": {
+        "tags": ["Products"],
+        "summary": "Product detail",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "Product detail" },
+          "404": { "description": "Not found" }
+        }
+      }
+    },
+    "/cart": {
+      "get": {
+        "tags": ["Cart"],
+        "summary": "View cart",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Cart data" }
+        }
+      }
+    },
+    "/cart/items": {
+      "post": {
+        "tags": ["Cart"],
+        "summary": "Add item to cart",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["product_id", "quantity"],
+                "properties": {
+                  "product_id": { "type": "integer" },
+                  "quantity": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Item added" }
+        }
+      }
+    },
+    "/cart/items/{id}": {
+      "patch": {
+        "tags": ["Cart"],
+        "summary": "Update item quantity",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "properties": { "quantity": { "type": "integer" } } }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Updated" } }
+      },
+      "delete": {
+        "tags": ["Cart"],
+        "summary": "Remove item from cart",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "204": { "description": "Deleted" } }
+      }
+    },
+    "/orders/checkout": {
+      "post": {
+        "tags": ["Orders"],
+        "summary": "Checkout cart",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "voucher_code": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Order created" } }
+      }
+    },
+    "/orders": {
+      "get": {
+        "tags": ["Orders"],
+        "summary": "Order history",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "List of orders" } }
+      }
+    },
+    "/orders/{id}": {
+      "get": {
+        "tags": ["Orders"],
+        "summary": "Order detail",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Order detail" } }
+      }
+    },
+    "/admin/products": {
+      "get": {
+        "tags": ["Admin"],
+        "summary": "List all products (admin)",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "All products" } }
+      },
+      "post": {
+        "tags": ["Admin"],
+        "summary": "Create product",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "sku"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "sku": { "type": "string" },
+                  "brand_id": { "type": "integer" },
+                  "status": { "type": "string", "enum": ["published", "draft"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/admin/products/{id}": {
+      "patch": {
+        "tags": ["Admin"],
+        "summary": "Update product",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Updated" } }
+      },
+      "delete": {
+        "tags": ["Admin"],
+        "summary": "Delete product",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "204": { "description": "Deleted" } }
+      }
+    }
+  }
+}
