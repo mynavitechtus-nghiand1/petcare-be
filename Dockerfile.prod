@@ -1,4 +1,4 @@
-FROM php:8.5-fpm
+FROM php:8.4-fpm
 
 # Install system dependencies + nginx + supervisor
 RUN apt-get update && apt-get install -y \
@@ -39,7 +39,7 @@ RUN composer install --no-dev --optimize-autoloader --no-scripts --no-interactio
 COPY . .
 
 # Final composer scripts
-RUN composer dump-autoload --optimize --no-dev
+RUN composer dump-autoload --optimize --no-dev --ignore-platform-reqs
 
 # Set permissions
 RUN chown -R www-data:www-data /var/www/html \
