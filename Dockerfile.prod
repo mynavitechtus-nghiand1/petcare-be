@@ -31,15 +31,15 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
 
-# Install PHP deps first (layer cache)
+# Install PHP deps (drop lock file so composer resolves fresh for PHP 8.4)
 COPY composer.json composer.lock ./
-RUN composer install --no-dev --optimize-autoloader --no-scripts --no-interaction --ignore-platform-reqs
+RUN composer update --no-dev --optimize-autoloader --no-scripts --no-interaction
 
 # Copy app code
 COPY . .
 
 # Final composer scripts
-RUN composer dump-autoload --optimize --no-dev --ignore-platform-reqs
+RUN composer dump-autoload --optimize --no-dev
 
 # Set permissions
 RUN chown -R www-data:www-data /var/www/html \
