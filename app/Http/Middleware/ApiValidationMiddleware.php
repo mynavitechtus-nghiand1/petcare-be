@@ -43,9 +43,8 @@ class ApiValidationMiddleware
                 );
             }
 
-            // Validate Accept header for JSON (*/* is also acceptable)
-            $accept = $request->header('Accept');
-            if ($header === 'Accept' && !str_contains($accept, 'application/json') && !str_contains($accept, '*/*')) {
+            // Validate Accept header for JSON
+            if ($header === 'Accept' && !str_contains($request->header('Accept'), 'application/json')) {
                 return ApiResponse::error(
                     'Accept header must include application/json',
                     400,

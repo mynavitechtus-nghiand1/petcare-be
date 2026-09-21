@@ -20,6 +20,10 @@
         presets: [SwaggerUIBundle.presets.apis],
         layout: 'BaseLayout',
         persistAuthorization: true,
+        requestInterceptor: (req) => {
+            req.headers['Accept'] = 'application/json';
+            return req;
+        },
     });
 </script>
 </body>
