@@ -98,6 +98,9 @@ class ProductController extends Controller
 
     public function destroy(Product $product): JsonResponse
     {
+        $product->categories()->detach();
+        $product->prices()->delete();
+        $product->inventory()->delete();
         $product->delete();
 
         return ApiResponse::success(null, 'Product deleted');
