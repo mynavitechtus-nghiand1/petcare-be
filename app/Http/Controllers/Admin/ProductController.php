@@ -98,14 +98,6 @@ class ProductController extends Controller
 
     public function destroy(Product $product): JsonResponse
     {
-        if ($product->orderItems()->exists()) {
-            return ApiResponse::error('Cannot delete product that has order history', 422, 'PRODUCT_HAS_ORDERS');
-        }
-
-        $product->categories()->detach();
-        $product->prices()->delete();
-        $product->inventory()->delete();
-        $product->cartItems()->delete();
         $product->delete();
 
         return ApiResponse::success(null, 'Product deleted');
