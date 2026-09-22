@@ -15,6 +15,7 @@ class Product extends BaseModel
         'product_type',
         'status',
         'description',
+        'image_url',
     ];
 
     protected function casts(): array
