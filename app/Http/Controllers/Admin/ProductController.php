@@ -30,6 +30,8 @@ class ProductController extends Controller
             'product_type' => ['sometimes', 'string', 'in:single'],
             'status'       => ['sometimes', 'string', 'in:draft,published'],
             'image_url'    => ['sometimes', 'nullable', 'url', 'max:500'],
+            'category_ids' => ['sometimes', 'array'],
+            'category_ids.*' => ['integer', 'exists:categories,id'],
             'price'        => ['sometimes', 'integer', 'min:0'],
             'currency'     => ['sometimes', 'string', 'max:3'],
             'quantity'     => ['sometimes', 'integer', 'min:0'],
@@ -38,6 +40,10 @@ class ProductController extends Controller
         $data['slug'] = Str::slug($data['name']);
 
         $product = Product::create($data);
+
+        if (isset($data['category_ids'])) {
+            $product->categories()->sync($data['category_ids']);
+        }
 
         if (isset($data['price'])) {
             ProductPrice::create([
@@ -55,7 +61,7 @@ class ProductController extends Controller
             ]);
         }
 
-        return ApiResponse::success($product->load(['brand', 'prices', 'inventory']), 'Product created', 201);
+        return ApiResponse::success($product->load(['brand', 'categories', 'prices', 'inventory']), 'Product created', 201);
     }
 
     public function update(Request $request, Product $product): JsonResponse
@@ -64,10 +70,12 @@ class ProductController extends Controller
             'brand_id'    => ['sometimes', 'integer', 'exists:brands,id'],
             'name'        => ['sometimes', 'string', 'max:255'],
             'sku'         => ['sometimes', 'string', 'max:100', 'unique:products,sku,' . $product->id],
-            'description' => ['nullable', 'string'],
-            'status'      => ['sometimes', 'string', 'in:draft,published'],
-            'image_url'   => ['sometimes', 'nullable', 'url', 'max:500'],
-            'price'       => ['sometimes', 'integer', 'min:0'],
+            'description'    => ['nullable', 'string'],
+            'status'         => ['sometimes', 'string', 'in:draft,published'],
+            'image_url'      => ['sometimes', 'nullable', 'url', 'max:500'],
+            'category_ids'   => ['sometimes', 'array'],
+            'category_ids.*' => ['integer', 'exists:categories,id'],
+            'price'          => ['sometimes', 'integer', 'min:0'],
             'currency'    => ['sometimes', 'string', 'max:3'],
             'quantity'    => ['sometimes', 'integer', 'min:0'],
         ]);
@@ -77,6 +85,10 @@ class ProductController extends Controller
         }
 
         $product->update($data);
+
+        if (isset($data['category_ids'])) {
+            $product->categories()->sync($data['category_ids']);
+        }
 
         if (isset($data['price'])) {
             $currency = $data['currency'] ?? 'VND';
@@ -93,7 +105,7 @@ class ProductController extends Controller
             );
         }
 
-        return ApiResponse::success($product->fresh()->load(['brand', 'prices', 'inventory']), 'Product updated');
+        return ApiResponse::success($product->fresh()->load(['brand', 'categories', 'prices', 'inventory']), 'Product updated');
     }
 
     public function destroy(Product $product): JsonResponse
