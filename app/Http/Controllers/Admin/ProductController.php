@@ -41,7 +41,7 @@ class ProductController extends Controller
         if (isset($data['price'])) {
             ProductPrice::create([
                 'product_id' => $product->id,
-                'currency'   => $data['currency'] ?? 'JPY',
+                'currency'   => $data['currency'] ?? 'VND',
                 'amount'     => $data['price'],
             ]);
         }
@@ -77,7 +77,7 @@ class ProductController extends Controller
         $product->update($data);
 
         if (isset($data['price'])) {
-            $currency = $data['currency'] ?? 'JPY';
+            $currency = $data['currency'] ?? 'VND';
             ProductPrice::updateOrCreate(
                 ['product_id' => $product->id, 'currency' => $currency],
                 ['amount' => $data['price']]
