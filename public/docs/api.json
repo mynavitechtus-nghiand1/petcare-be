@@ -6,15 +6,11 @@
     "version": "1.0.0"
   },
   "servers": [
-    { "url": "/api/v1", "description": "Production" }
+    { "url": "https://petcare-be-production.up.railway.app/api/v1", "description": "Production" }
   ],
   "components": {
     "securitySchemes": {
-      "bearerAuth": {
-        "type": "http",
-        "scheme": "bearer",
-        "bearerFormat": "JWT"
-      }
+      "bearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "Sanctum" }
     },
     "schemas": {
       "TokenResponse": {
@@ -32,10 +28,43 @@
           "name": { "type": "string" },
           "slug": { "type": "string" },
           "sku": { "type": "string" },
+          "description": { "type": "string", "nullable": true },
+          "image_url": { "type": "string", "nullable": true },
           "status": { "type": "string", "enum": ["published", "draft"] },
           "brand": { "type": "object" },
           "categories": { "type": "array", "items": { "type": "object" } },
-          "price": { "type": "object" }
+          "prices": { "type": "array", "items": { "type": "object" } },
+          "inventory": { "type": "object", "nullable": true }
+        }
+      },
+      "Brand": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" },
+          "slug": { "type": "string" },
+          "is_active": { "type": "boolean" }
+        }
+      },
+      "Category": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" },
+          "slug": { "type": "string" },
+          "sort_order": { "type": "integer" },
+          "is_active": { "type": "boolean" }
+        }
+      },
+      "Order": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "status": { "type": "string", "enum": ["pending","paid","processing","shipped","delivered","cancelled","refunded"] },
+          "currency": { "type": "string" },
+          "subtotal_amount": { "type": "integer" },
+          "items": { "type": "array", "items": { "type": "object" } },
+          "payments": { "type": "array", "items": { "type": "object" } }
         }
       }
     }
@@ -45,9 +74,7 @@
       "get": {
         "tags": ["System"],
         "summary": "Health check",
-        "responses": {
-          "200": { "description": "OK" }
-        }
+        "responses": { "200": { "description": "OK" } }
       }
     },
     "/auth/register": {
@@ -56,26 +83,9 @@
         "summary": "Register new account",
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["name", "email", "password"],
-                "properties": {
-                  "name": { "type": "string" },
-                  "email": { "type": "string", "format": "email" },
-                  "password": { "type": "string", "format": "password" }
-                }
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object", "required": ["name","email","password"], "properties": { "name": { "type": "string" }, "email": { "type": "string", "format": "email" }, "password": { "type": "string" } } } } }
         },
-        "responses": {
-          "201": {
-            "description": "Registered",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TokenResponse" } } }
-          }
-        }
+        "responses": { "201": { "description": "Registered", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TokenResponse" } } } } }
       }
     },
     "/auth/login": {
@@ -84,25 +94,9 @@
         "summary": "Login by email/password",
         "requestBody": {
           "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["email", "password"],
-                "properties": {
-                  "email": { "type": "string", "format": "email" },
-                  "password": { "type": "string" }
-                }
-              }
-            }
-          }
+          "content": { "application/json": { "schema": { "type": "object", "required": ["email","password"], "properties": { "email": { "type": "string", "format": "email" }, "password": { "type": "string" } } } } }
         },
-        "responses": {
-          "200": {
-            "description": "Login success",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TokenResponse" } } }
-          }
-        }
+        "responses": { "200": { "description": "Login success", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TokenResponse" } } } } }
       }
     },
     "/auth/refresh": {
@@ -110,47 +104,90 @@
         "tags": ["Auth"],
         "summary": "Rotate refresh token",
         "security": [{ "bearerAuth": [] }],
-        "responses": {
-          "200": { "description": "New tokens", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TokenResponse" } } } }
-        }
+        "responses": { "200": { "description": "New tokens" } }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Get current user info",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "User info" } }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Logout",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Logged out" } }
       }
     },
     "/auth/google": {
       "get": {
         "tags": ["Auth"],
         "summary": "Get Google OAuth redirect URL",
-        "responses": {
-          "200": { "description": "Redirect URL" }
-        }
+        "responses": { "200": { "description": "Redirect URL" } }
+      }
+    },
+    "/brands": {
+      "get": {
+        "tags": ["Brands"],
+        "summary": "List active brands",
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer" } },
+          { "name": "per_page", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Brands list" } }
+      }
+    },
+    "/brands/{id}": {
+      "get": {
+        "tags": ["Brands"],
+        "summary": "Brand detail with products",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Brand detail" } }
+      }
+    },
+    "/categories": {
+      "get": {
+        "tags": ["Categories"],
+        "summary": "List active categories",
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer" } },
+          { "name": "per_page", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Categories list" } }
+      }
+    },
+    "/categories/{id}": {
+      "get": {
+        "tags": ["Categories"],
+        "summary": "Category detail with products",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Category detail" } }
       }
     },
     "/products": {
       "get": {
         "tags": ["Products"],
-        "summary": "List published products (paginated, cached)",
+        "summary": "List published products",
         "parameters": [
           { "name": "brand_id", "in": "query", "schema": { "type": "integer" } },
           { "name": "category_id", "in": "query", "schema": { "type": "integer" } },
-          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Search keyword" },
+          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Search by name" },
           { "name": "page", "in": "query", "schema": { "type": "integer" } },
           { "name": "per_page", "in": "query", "schema": { "type": "integer" } }
         ],
-        "responses": {
-          "200": { "description": "List of products" }
-        }
+        "responses": { "200": { "description": "Products list" } }
       }
     },
     "/products/{id}": {
       "get": {
         "tags": ["Products"],
         "summary": "Product detail",
-        "parameters": [
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
-        ],
-        "responses": {
-          "200": { "description": "Product detail" },
-          "404": { "description": "Not found" }
-        }
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Product detail" }, "404": { "description": "Not found" } }
       }
     },
     "/cart": {
@@ -158,9 +195,7 @@
         "tags": ["Cart"],
         "summary": "View cart",
         "security": [{ "bearerAuth": [] }],
-        "responses": {
-          "200": { "description": "Cart data" }
-        }
+        "responses": { "200": { "description": "Cart" } }
       }
     },
     "/cart/items": {
@@ -168,24 +203,8 @@
         "tags": ["Cart"],
         "summary": "Add item to cart",
         "security": [{ "bearerAuth": [] }],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["product_id", "quantity"],
-                "properties": {
-                  "product_id": { "type": "integer" },
-                  "quantity": { "type": "integer" }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": { "description": "Item added" }
-        }
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["product_id","quantity"], "properties": { "product_id": { "type": "integer" }, "quantity": { "type": "integer" } } } } } },
+        "responses": { "201": { "description": "Item added" } }
       }
     },
     "/cart/items/{id}": {
@@ -193,26 +212,24 @@
         "tags": ["Cart"],
         "summary": "Update item quantity",
         "security": [{ "bearerAuth": [] }],
-        "parameters": [
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": { "type": "object", "properties": { "quantity": { "type": "integer" } } }
-            }
-          }
-        },
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "properties": { "quantity": { "type": "integer" } } } } } },
         "responses": { "200": { "description": "Updated" } }
       },
       "delete": {
         "tags": ["Cart"],
-        "summary": "Remove item from cart",
+        "summary": "Remove item",
         "security": [{ "bearerAuth": [] }],
-        "parameters": [
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
-        ],
-        "responses": { "204": { "description": "Deleted" } }
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Removed" } }
+      }
+    },
+    "/orders": {
+      "get": {
+        "tags": ["Orders"],
+        "summary": "My order history",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Orders" } }
       }
     },
     "/orders/checkout": {
@@ -220,27 +237,8 @@
         "tags": ["Orders"],
         "summary": "Checkout cart",
         "security": [{ "bearerAuth": [] }],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "voucher_code": { "type": "string" }
-                }
-              }
-            }
-          }
-        },
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "properties": { "voucher_code": { "type": "string" }, "currency": { "type": "string", "enum": ["VND","USD"] }, "shipping_name": { "type": "string" }, "shipping_phone": { "type": "string" }, "shipping_address": { "type": "string" } } } } } },
         "responses": { "201": { "description": "Order created" } }
-      }
-    },
-    "/orders": {
-      "get": {
-        "tags": ["Orders"],
-        "summary": "Order history",
-        "security": [{ "bearerAuth": [] }],
-        "responses": { "200": { "description": "List of orders" } }
       }
     },
     "/orders/{id}": {
@@ -248,60 +246,126 @@
         "tags": ["Orders"],
         "summary": "Order detail",
         "security": [{ "bearerAuth": [] }],
-        "parameters": [
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
-        ],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
         "responses": { "200": { "description": "Order detail" } }
       }
     },
     "/admin/products": {
       "get": {
-        "tags": ["Admin"],
+        "tags": ["Admin - Products"],
         "summary": "List all products (admin)",
         "security": [{ "bearerAuth": [] }],
         "responses": { "200": { "description": "All products" } }
       },
       "post": {
-        "tags": ["Admin"],
+        "tags": ["Admin - Products"],
         "summary": "Create product",
         "security": [{ "bearerAuth": [] }],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["name", "sku"],
-                "properties": {
-                  "name": { "type": "string" },
-                  "sku": { "type": "string" },
-                  "brand_id": { "type": "integer" },
-                  "status": { "type": "string", "enum": ["published", "draft"] }
-                }
-              }
-            }
-          }
-        },
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["brand_id","name","sku"], "properties": { "brand_id": { "type": "integer" }, "name": { "type": "string" }, "sku": { "type": "string" }, "description": { "type": "string" }, "image_url": { "type": "string" }, "status": { "type": "string", "enum": ["draft","published"] }, "category_ids": { "type": "array", "items": { "type": "integer" } }, "price": { "type": "integer", "description": "Price in VND (smallest unit)" }, "currency": { "type": "string", "default": "VND" }, "quantity": { "type": "integer" } } } } } },
         "responses": { "201": { "description": "Created" } }
       }
     },
     "/admin/products/{id}": {
       "patch": {
-        "tags": ["Admin"],
+        "tags": ["Admin - Products"],
         "summary": "Update product",
         "security": [{ "bearerAuth": [] }],
-        "parameters": [
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
-        ],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "properties": { "brand_id": { "type": "integer" }, "name": { "type": "string" }, "sku": { "type": "string" }, "description": { "type": "string" }, "image_url": { "type": "string" }, "status": { "type": "string", "enum": ["draft","published"] }, "category_ids": { "type": "array", "items": { "type": "integer" } }, "price": { "type": "integer" }, "currency": { "type": "string" }, "quantity": { "type": "integer" } } } } } },
         "responses": { "200": { "description": "Updated" } }
       },
       "delete": {
-        "tags": ["Admin"],
-        "summary": "Delete product",
+        "tags": ["Admin - Products"],
+        "summary": "Soft delete product",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Deleted" } }
+      }
+    },
+    "/admin/brands": {
+      "get": {
+        "tags": ["Admin - Brands"],
+        "summary": "List all brands",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Brands" } }
+      },
+      "post": {
+        "tags": ["Admin - Brands"],
+        "summary": "Create brand",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["name"], "properties": { "name": { "type": "string" }, "is_active": { "type": "boolean", "default": true } } } } } },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/admin/brands/{id}": {
+      "patch": {
+        "tags": ["Admin - Brands"],
+        "summary": "Update brand",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "properties": { "name": { "type": "string" }, "is_active": { "type": "boolean" } } } } } },
+        "responses": { "200": { "description": "Updated" } }
+      },
+      "delete": {
+        "tags": ["Admin - Brands"],
+        "summary": "Deactivate brand",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Deactivated" } }
+      }
+    },
+    "/admin/categories": {
+      "get": {
+        "tags": ["Admin - Categories"],
+        "summary": "List all categories",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Categories" } }
+      },
+      "post": {
+        "tags": ["Admin - Categories"],
+        "summary": "Create category",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["name"], "properties": { "name": { "type": "string" }, "sort_order": { "type": "integer" }, "is_active": { "type": "boolean", "default": true } } } } } },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/admin/categories/{id}": {
+      "patch": {
+        "tags": ["Admin - Categories"],
+        "summary": "Update category",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "properties": { "name": { "type": "string" }, "sort_order": { "type": "integer" }, "is_active": { "type": "boolean" } } } } } },
+        "responses": { "200": { "description": "Updated" } }
+      },
+      "delete": {
+        "tags": ["Admin - Categories"],
+        "summary": "Deactivate category",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Deactivated" } }
+      }
+    },
+    "/admin/orders": {
+      "get": {
+        "tags": ["Admin - Orders"],
+        "summary": "List all orders",
         "security": [{ "bearerAuth": [] }],
         "parameters": [
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["pending","paid","processing","shipped","delivered","cancelled","refunded"] } },
+          { "name": "per_page", "in": "query", "schema": { "type": "integer" } }
         ],
-        "responses": { "204": { "description": "Deleted" } }
+        "responses": { "200": { "description": "Orders" } }
+      }
+    },
+    "/admin/orders/{id}": {
+      "patch": {
+        "tags": ["Admin - Orders"],
+        "summary": "Update order status",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["status"], "properties": { "status": { "type": "string", "enum": ["pending","paid","processing","shipped","delivered","cancelled","refunded"] } } } } } },
+        "responses": { "200": { "description": "Updated" } }
       }
     }
   }
