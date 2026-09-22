@@ -1,5 +1,8 @@
 <?php
 
+use App\Http\Controllers\Admin\BrandController as AdminBrandController;
+use App\Http\Controllers\Admin\CategoryController as AdminCategoryController;
+use App\Http\Controllers\Admin\OrderController as AdminOrderController;
 use App\Http\Controllers\Admin\ProductController as AdminProductController;
 use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\AuthController;
@@ -60,5 +63,20 @@ Route::prefix('v1')->group(function () {
         Route::put('/products/{product}', [AdminProductController::class, 'update']);
         Route::patch('/products/{product}', [AdminProductController::class, 'update']);
         Route::delete('/products/{product}', [AdminProductController::class, 'destroy']);
+
+        Route::get('/brands', [AdminBrandController::class, 'index']);
+        Route::post('/brands', [AdminBrandController::class, 'store']);
+        Route::put('/brands/{brand}', [AdminBrandController::class, 'update']);
+        Route::patch('/brands/{brand}', [AdminBrandController::class, 'update']);
+        Route::delete('/brands/{brand}', [AdminBrandController::class, 'destroy']);
+
+        Route::get('/categories', [AdminCategoryController::class, 'index']);
+        Route::post('/categories', [AdminCategoryController::class, 'store']);
+        Route::put('/categories/{category}', [AdminCategoryController::class, 'update']);
+        Route::patch('/categories/{category}', [AdminCategoryController::class, 'update']);
+        Route::delete('/categories/{category}', [AdminCategoryController::class, 'destroy']);
+
+        Route::get('/orders', [AdminOrderController::class, 'index']);
+        Route::patch('/orders/{order}', [AdminOrderController::class, 'update']);
     });
 });
